@@ -16,50 +16,52 @@ def create_distributed_orchestrator(
     orchestrator_interface,
     orchestrator_nodes,
     orchestrator_node_features,
-    walltime
     ):
 
     orchestrator = exp.create_database(
         port = orchestrator_port,
         interface = orchestrator_interface,
         db_nodes = orchestrator_nodes,
-        time=walltime,
-        threads_per_queue=2,
-        batch=True)
+        threads_per_queue=2
+    )
 
     if orchestrator_node_features:
-        orchestrator.set_batch_arg("constraint", orchestrator_node_features)
+        orchestrator.set_run_arg("constraint", orchestrator_node_features)
     return orchestrator
 
 def create_NEMO_model(
         experiment,
-        walltime,
         num_nodes,
         tasks_per_node,
+        node_features,
         NEMO_cfg_path,
+        NEMO_input_path,
         NEMO_forcing_path
     ):
 
     NEMO_run_settings = experiment.create_run_settings(
-        NEMO_cfg_path,
-        run_args = { 'time': walltime }
+        f"{NEMO_cfg_path}/BLD/bin/nemo.exe",
+        run_args = { 'C':node_features }
     )
-
     NEMO_run_settings.set_tasks_per_node(tasks_per_node)
     NEMO_run_settings.set_tasks(num_nodes*tasks_per_node)
 
     NEMO_model = experiment.create_model(
-        f"{NEMO_cfg_path}/BLD/bin/nemo.exe",
+        "NEMO",
         run_settings   = NEMO_run_settings,
     )
 
+    xml_files = glob(f"{NEMO_cfg_path}/EXPREF/*.xml")
+    forcing_files = glob(f"{NEMO_forcing_path}/*")
+    forcing_files+= glob(f"{NEMO_input_path}/*")
+
     NEMO_model.attach_generator_files(
         to_configure=[
-            f"{NEMO_cfg_path}/EXPREF/namelist.eORCA025.L75-IMHOTEP02",
-            f"{NEMO_cfg_path}/EXPREF/namelist-ice.eORCA025.L75-IMHOTEP02"
-        ]
-        to_copy=f"{NEMO_cfg_path}/EXPREF/*.xml",
-        to_symlink=f"{NEMO_forcing_path}/*"
+            f"{NEMO_cfg_path}/EXPREF/namelist",
+            f"{NEMO_cfg_path}/EXPREF/namelist_ice"
+        ],
+        to_copy=xml_files,
+        to_symlink=forcing_files
     )
 
     return NEMO_model
@@ -92,11 +94,12 @@ def configure_NEMO_model(
 
 
 def NEMO_clustered_driver(
-    walltime="02:00:00",
-    num_nodes=25,
-    tasks_per_node=45,
+    num_nodes=48,
+    tasks_per_node=48,
+    node_features='[CL48|CL56]',
     NEMO_cfg_path="/home/users/shao/dev/m2lines/NEMO_4.0.6_IMHOTEP/cfgs/eORCA025.L75-IMHOTEP02",
-    NEMO_forcing_path="/lus/scratch/shao/model_inputs/NEMO4/ORCA025.L75/eORCA025.L75-IMHOTEP02-I",
+    NEMO_forcing_path="/lus/scratch/shao/model_inputs/NEMO4/FORCING_ATMOSPHERIQUE/JRA55",
+    NEMO_input_path="/lus/scratch/shao/model_inputs/NEMO4/ORCA025.L75/eORCA025.L75-IMHOTEP02-I",
     job_number = 1,
     first_time_step = 1,
     last_time_step = 72,
@@ -113,12 +116,12 @@ def NEMO_clustered_driver(
     """Run a NEMO OM4_025 simulation with a cluster of databases used for
     machine-learning inference
 
-    :param walltime: how long to allocate for the run, "hh:mm:ss"
-    :type walltime: str, optional
-    :param num_nodes: number of nodes allocated to each model member
+    :param num_nodes: number of nodes allocated to NEMO
     :type num_nodes: int, optional
     :param tasks_per_node: how many MPI ranks to be run per node
     :type tasks_per_node: int, optional
+    :param node_features: features of the nodes that the NEMO should run on
+    :type node_features: int, optional
     :param NEMO_cfg_path: full path to the NEMO configuration directory
     :type NEMO_cfg_path: str, optional
     :param NEMO_forcing_path: full path to the NEMO forcing directory
@@ -144,7 +147,7 @@ def NEMO_clustered_driver(
     :type orchestrator_interface: str, optional
     :param orchestrator_nodes: number of orchestrator nodes to use
     :type orchestrator_nodes: int, optional
-    :param orchestrator_node_features: (Slurm-only) node features requested for
+    :param orchestrator_node_features: node features requested for
                                        the orchestrator nodes
     :type orchestrator_node_features: str, optional
     :param configure_only: If True, only configure the experiment and return
@@ -152,13 +155,14 @@ def NEMO_clustered_driver(
     :type configure_only: bool, optional
     """
 
-    experiment = Experiment("AI-EKE-NEMO", launcher="auto")
+    experiment = Experiment("AI-EKE-NEMO", launcher="slurm")
     NEMO_model = create_NEMO_model(
         experiment,
-        walltime,
         num_nodes,
         tasks_per_node,
+        node_features,
         NEMO_cfg_path,
+        NEMO_input_path,
         NEMO_forcing_path
      )
     configure_NEMO_model(
@@ -177,7 +181,6 @@ def NEMO_clustered_driver(
         orchestrator_interface,
         orchestrator_nodes,
         orchestrator_node_features,
-        walltime
     )
 
     experiment.generate( NEMO_model, orchestrator, overwrite=True )
