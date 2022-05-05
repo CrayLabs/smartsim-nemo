@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=nemo4-imhotep
 #SBATCH --time=06:00:00                          # Time limit hrs:min:sec
-#SBATCH --constraint="[P100*12&CL48*36]"    # Select 12 GPU nodes and 36 CascadeLake 48-core nodes
-#SBATCH --nodes=48                               # 48 total nodes (12 GPU and 36 CL48
+#SBATCH --constraint="[P100*12&CL48*37]"    # Select 12 GPU nodes and 36 CascadeLake 48-core nodes
+#SBATCH --nodes=49                               # 48 total nodes: 12 GPU and 36 CL48 (NEMO) 1 CL48 (XIOS)
 
 __conda_setup="$('/home/users/shao/lus/shao/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
 if [ $? -eq 0 ]; then
